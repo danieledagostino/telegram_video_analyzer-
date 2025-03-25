@@ -5,10 +5,10 @@ from deepface import DeepFace
 import math
 
 # Configurazione
-api_id = '28590949' 
-api_hash = 'b4f3ee519a6617b6843f341a14215729'
-phone_number = '003383160985'
-chat_name = 'pattinatoridelpinciochat'
+api_id = '' 
+api_hash = ''
+phone_number = ''
+chat_name = ''
 reference_image_path = "reference.jpg"
 
 # Cartelle organizzate
