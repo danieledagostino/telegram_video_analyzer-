@@ -1,0 +1,19 @@
+{
+    "telegram": {
+        "api_id": "<api_id>",
+        "api_hash": "<api_hash>",
+        "phone_number": "<personal_phone_no>",
+        "chat_name": "<target_chat>"
+    },
+    "analysis": {
+        "reference_image": "reference.jpg",
+        "frame_interval": 5,
+        "min_confidence": 0.85
+    },
+    "storage": {
+        "download_folder": "videos_temp",
+        "output_folder": "matched_videos",
+        "max_size_gb": 50,
+        "log_file": "download_status.json"
+    }
+}
