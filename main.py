@@ -1,27 +1,24 @@
+import json
+import argparse
 from telethon.sync import TelegramClient
+from telethon.tl.types import DocumentAttributeVideo, DocumentAttributeFilename
 import cv2
 import os
 from deepface import DeepFace
 import math
+import time
+from datetime import datetime
 
-# Configurazione
-api_id = '' 
-api_hash = ''
-phone_number = ''
-chat_name = ''
-reference_image_path = "reference.jpg"
+# Caricamento configurazione
+with open('config.json') as f:
+    config = json.load(f)
 
-# Cartelle organizzate
-download_folder = "videos_temp"
-output_folder = "matched_videos"
-os.makedirs(download_folder, exist_ok=True)
-os.makedirs(output_folder, exist_ok=True)
-
-# Limiti configurabili
-MAX_TOTAL_SIZE = 50  # GB
-VIDEO_LIMIT = None  # Numero massimo video (None=illimitato)
-
-client = TelegramClient('session_name', api_id, api_hash)
+# Inizializzazione client Telegram
+client = TelegramClient(
+    'session_name',
+    config['telegram']['api_id'],
+    config['telegram']['api_hash']
+)
 
 def convert_size(size_bytes):
     """Converti bytes in GB/MB"""
@@ -31,47 +28,117 @@ def convert_size(size_bytes):
     i = int(math.floor(math.log(size_bytes, 1024)))
     return f"{round(size_bytes / (1024 ** i), 2)}{units[i]}"
 
-async def download_all_videos():
-    """FASE 1: Scarica TUTTI i video"""
-    await client.start(phone_number)
-    total_size = 0
+def load_download_status():
+    """Carica lo stato dei download"""
+    if not os.path.exists(config['storage']['log_file']):
+        return {'downloaded': {}, 'last_message_id': None}
     
-    async for message in client.iter_messages(chat_name, limit=VIDEO_LIMIT):
-        if message.video:
-            video_size = message.video.size
+    with open(config['storage']['log_file'], 'r') as f:
+        return json.load(f)
+
+def save_download_status(status):
+    """Salva lo stato dei download"""
+    with open(config['storage']['log_file'], 'w') as f:
+        json.dump(status, f, indent=2)
+
+def is_video_message(message):
+    """Controlla se il messaggio contiene un video"""
+    if message.video:
+        return True
+    if message.document:
+        for attr in message.document.attributes:
+            if isinstance(attr, (DocumentAttributeVideo, DocumentAttributeFilename)):
+                return True
+    return False
+
+async def download_videos(resume=False):
+    """Scarica i video dalla chat"""
+    await client.start(config['telegram']['phone_number'])
+    status = load_download_status()
+    total_size = sum(int(v['size']) for v in status['downloaded'].values())
+    
+    request_params = {
+        'entity': config['telegram']['chat_name'],
+        'limit': None
+    }
+    
+    if resume and status['last_message_id']:
+        request_params['offset_id'] = status['last_message_id']
+    
+    async for message in client.iter_messages(**request_params):
+        try:
+            if not is_video_message(message):
+                continue
+                
+            # Ottieni la dimensione in modo sicuro
+            media = message.video or message.document
+            if not media:
+                continue
+                
+            video_size = media.size
+            video_date = message.date.strftime('%Y-%m-%d_%H-%M-%S')
+            video_name = f"{video_date}_{message.id}.mp4"
+            video_path = os.path.join(config['storage']['download_folder'], video_name)
             
-            if MAX_TOTAL_SIZE and (total_size + video_size) > MAX_TOTAL_SIZE * 1024**3:
-                print(f"⚠️ Raggiunto limite di {MAX_TOTAL_SIZE}GB. Interruzione.")
+            if str(message.id) in status['downloaded']:
+                continue
+                
+            # Controllo spazio disco
+            if (total_size + video_size) > config['storage']['max_size_gb'] * 1024**3:
+                print(f"⚠️ Raggiunto limite di {config['storage']['max_size_gb']}GB")
                 break
                 
-            video_path = os.path.join(download_folder, f"{message.id}.mp4")
+            await message.download_media(file=video_path)
+            status['downloaded'][str(message.id)] = {
+                'name': video_name,
+                'size': video_size,
+                'date': video_date,
+                'analyzed': False
+            }
+            status['last_message_id'] = message.id
+            total_size += video_size
             
-            if not os.path.exists(video_path):
-                await message.download_media(file=video_path)
-                total_size += video_size
-                print(f"📥 Scaricato: {os.path.basename(video_path)} - {convert_size(video_size)} (Totale: {convert_size(total_size)})")
+            print(f"📥 [{video_date}] Scaricato: {video_name} - {convert_size(video_size)}")
+            save_download_status(status)
+            
+        except Exception as e:
+            print(f"⚠️ Errore durante il processing del messaggio {message.id}: {str(e)}")
+            time.sleep(5)
     
     await client.disconnect()
-    return total_size
 
 def analyze_videos():
-    """FASE 2: Analisi offline"""
-    matched_count = 0
+    """Analizza i video scaricati"""
+    status = load_download_status()
+    analyzed_count = 0
     
-    for video_file in os.listdir(download_folder):
-        video_path = os.path.join(download_folder, video_file)
-        
-        try:
-            if analyze_single_video(video_path):
-                matched_count += 1
-                # Sposta il video positivo
-                os.rename(video_path, os.path.join(output_folder, video_file))
-            else:
-                os.remove(video_path)  # Cancella i negativi
-        except Exception as e:
-            print(f"⚠️ Errore con {video_file}: {str(e)}")
+    for video_id, video_info in status['downloaded'].items():
+        if not video_info['analyzed']:
+            video_path = os.path.join(
+                config['storage']['download_folder'],
+                video_info['name']
+            )
+            
+            try:
+                print(f"🔍 Analisi {video_info['name']}...")
+                if analyze_single_video(video_path):
+                    os.rename(
+                        video_path,
+                        os.path.join(config['storage']['output_folder'], video_info['name'])
+                    )
+                    analyzed_count += 1
+                    print(f"✅ Trovata corrispondenza in {video_info['name']}")
+                else:
+                    os.remove(video_path)
+                
+                video_info['analyzed'] = True
+                save_download_status(status)
+                
+            except Exception as e:
+                print(f"⚠️ Errore analisi {video_info['name']}: {str(e)}")
+                time.sleep(2)
     
-    print(f"✅ Analisi completata. Video corrispondenti: {matched_count}")
+    print(f"✅ Analisi completata. Video corrispondenti: {analyzed_count}")
 
 def analyze_single_video(video_path):
     """Analizza un singolo video"""
@@ -84,17 +151,17 @@ def analyze_single_video(video_path):
         if not ret:
             break
             
-        if frame_count % int(fps * 5) == 0:  # Analizza 1 frame ogni 5 secondi
+        if frame_count % int(fps * config['analysis']['frame_interval']) == 0:
             temp_frame = "temp_frame.jpg"
             cv2.imwrite(temp_frame, frame)
             
             try:
                 result = DeepFace.verify(
                     img1_path=temp_frame,
-                    img2_path=reference_image_path,
+                    img2_path=config['analysis']['reference_image'],
                     enforce_detection=False
                 )
-                if result["verified"]:
+                if result["verified"] and result["distance"] < (1 - config['analysis']['min_confidence']):
                     return True
             finally:
                 if os.path.exists(temp_frame):
@@ -105,10 +172,21 @@ def analyze_single_video(video_path):
     cap.release()
     return False
 
-# Esecuzione
-print("=== FASE 1: Download ===")
-with client:
-    total_downloaded = client.loop.run_until_complete(download_all_videos())
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--mode', choices=['new', 'resume', 'analyze'], required=True,
+                       help="Modalità esecuzione: new (scarica tutto), resume (continua download), analyze (solo analisi)")
+    args = parser.parse_args()
 
-print(f"\n=== FASE 2: Analisi ({convert_size(total_downloaded)} da processare) ===")
-analyze_videos()
+    # Crea cartelle se mancanti
+    os.makedirs(config['storage']['download_folder'], exist_ok=True)
+    os.makedirs(config['storage']['output_folder'], exist_ok=True)
+
+    if args.mode in ['new', 'resume']:
+        print("=== FASE DOWNLOAD ===")
+        with client:
+            client.loop.run_until_complete(download_videos(resume=(args.mode == 'resume')))
+
+    if args.mode in ['new', 'resume', 'analyze']:
+        print("\n=== FASE ANALISI ===")
+        analyze_videos()
