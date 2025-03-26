@@ -1,103 +1,134 @@
-# Telegram Video Analyzer 🕵️‍♂️
+Ecco il file `README.md` aggiornato con le istruzioni per Ubuntu e il comando `caffeinate`:
 
-Un bot Python che:
-1. Scansiona chat Telegram per video
-2. Cerca volti specifici usando l'AI (DeepFace)
-3. Organizza automaticamente i risultati
+```markdown
+# Telegram Video Analyzer 🔍
 
-![Demo](https://via.placeholder.com/800x400?text=Screen+Demo+Here) *(Sostituisci con GIF reale)*
+Un sistema avanzato per scaricare e analizzare video da Telegram con riconoscimento facciale.
 
-## 🛠️ Tecnologie
-- **Telethon** - API Telegram
-- **OpenCV** - Elaborazione video
-- **DeepFace** - Riconoscimento facciale
-- **Lightweight** - Solo 5MB di dipendenze
-
-## ⚡ Installazione Rapida
+## 🛠️ Installazione su Ubuntu
 
 ```bash
-🔐 Configurazione
-Crea un file config.ini:
+# 1. Installa le dipendenze di sistema
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip git
 
-ini
-Copy
-[telegram]
-api_id = 1234567
-api_hash = 'tuo_api_hash'
-phone = '+39123456789'
-target_chat = 'nome_chat_o_id'
-🚀 Utilizzo
-bash
-Copy
-# Modalità completa (download + analisi)
-python main.py --full
-
-# Solo download (senza analisi)
-python main.py --download-only
-
-# Analisi offline
-python main.py --analyze-local
-⚙️ Opzioni Avanzate
-Flag	Descrizione	Default
---max-size	Limite spazio disco (GB)	50
---frame-interval	Analizza 1 frame ogni X secondi	5
---min-confidence	Soglia riconoscimento (0-1)	0.85
-📂 Struttura File
-Copy
-.
-├── matched_videos/      # Video con match positivi
-├── videos_temp/         # Download temporanei
-├── reference.jpg        # Foto persona da cercare
-├── config.ini           # Configurazione
-└── logs/                # Log automatici
-🤝 Contribuire
-Fork del progetto
-
-Crea un branch (git checkout -b feature/awesome-feature)
-
-Commit (git commit -m 'Add feature')
-
-Push (git push origin feature/awesome-feature)
-
-Apri una Pull Request
-
-⚠️ Avvertenze
-Lo storage richiesto può essere elevato
-
-Processo CPU-intensive per l'analisi video
-
-Usare con moderazione per evitare ban Telegram
-
-📄 Licenza
-MIT © [Il Tuo Nome] - Libero uso con attribuzione
-
-🔍 Troubleshooting | 📚 Documentazione Completa | 💡 Wiki
-
-Copy
-
-### Caratteristiche chiave:
-1. **Sezioni complete** con badge visivi
-2. **Tabelle** per opzioni CLI
-3. **Struttura ad albero** chiara
-4. **Multi-language ready** (aggiungi bandiere se necessario)
-5. **Responsive** per GitHub mobile
-
-### Passaggi successivi:
-1. Sostituisci `[tuo_user]` con il tuo GitHub
-2. Aggiungi screenshot reali (sostituisci il placeholder)
-3. Personalizza la licenza
-4. Crea una cartella `docs/` per guide avanzate (opzionale)
-
-Vuoi che aggiunga altre sezioni specifiche? 😊
-# 1. Clona il repository
-git clone https://github.com/tuouser/telegram-video-analyzer.git
+# 2. Clona il repository
+git clone https://github.com/tuoutente/telegram-video-analyzer.git
 cd telegram-video-analyzer
 
-# 2. Crea virtual environment (Python 3.8+)
+# 3. Crea e attiva l'ambiente virtuale
 python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
-# venv\Scripts\activate   # Windows
+source venv/bin/activate
 
-# 3. Installa dipendenze
+# 4. Installa le dipendenze Python
 pip install -r requirements.txt
 
+# 5. Installa caffeinate (per prevenire sospensioni)
+sudo apt install -y caffeine
+```
+
+## 🚀 Avvio del Programma
+
+**Modalità base:**
+```bash
+python3 main.py --mode new
+```
+
+**Con prevenzione sospensione (macOS):**
+```bash
+caffeinate -d -s -i $(python3 main.py --mode new)
+```
+
+**Su Ubuntu (usando caffeine):**
+```bash
+# Avvia caffeine in background
+caffeine &
+
+# Poi esegui lo script
+python3 main.py --mode new
+
+# Disattiva caffeine quando completato
+pkill caffeine
+```
+
+## 🔧 Parametri di Esecuzione
+
+| Parametro   | Descrizione                                  | Esempio                     |
+|-------------|----------------------------------------------|-----------------------------|
+| `--mode`    | Modalità operativa (new/resume/analyze)      | `--mode resume`             |
+| `--notify`  | Notifiche desktop (richiede `libnotify-bin`) | `--mode new --notify`       |
+
+## 🛑 Prevenzione Sospensione
+
+Per sessioni lunghe:
+
+**macOS:**
+```bash
+caffeinate -d -s -i $(python3 main.py --mode new)
+```
+
+**Ubuntu:**
+```bash
+# Metodo 1 - caffeine
+sudo apt install caffeine
+caffeine &
+
+# Metodo 2 - systemd
+sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+```
+
+**Disattivare dopo l'uso (Ubuntu):**
+```bash
+sudo systemctl unmask sleep.target suspend.target hibernate.target hybrid-sleep.target
+```
+
+## 📌 Note Importanti
+
+1. Per Ubuntu 22.04+ potrebbe essere necessario:
+```bash
+sudo apt install python3-tk
+```
+
+2. Se usi GNOME:
+```bash
+# Previene sospensione durante l'esecuzione
+gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-timeout 0
+```
+
+3. Per monitorare lo stato:
+```bash
+watch -n 1 "du -sh videos_temp/; ls -1 videos_temp/ | wc -l"
+```
+
+## 🌟 Funzionalità Aggiuntive
+
+- **Notifiche desktop** (Ubuntu):
+```bash
+sudo apt install libnotify-bin
+python3 main.py --mode new --notify
+```
+
+- **Avvio in background**:
+```bash
+nohup python3 main.py --mode new > output.log 2>&1 &
+```
+
+Aggiornato con:
+- Comandi specifici per Ubuntu
+- Istruzioni complete per caffeinate/caffeine
+- Soluzioni per prevenire sospensioni
+- Comandi di monitoraggio
+- Opzioni per notifiche desktop
+```
+
+### Novità principali:
+1. **Sezione Ubuntu** completa con tutti i pacchetti necessari
+2. **Istruzioni caffeine** per entrambi i sistemi operativi
+3. **Comandi di monitoraggio** durante l'esecuzione
+4. **Soluzioni GNOME** specifiche
+5. **Opzioni avanzate** per esecuzione in background
+
+### Per completare:
+1. Sostituisci `tuoutente` con il tuo nome utente GitHub
+2. Aggiungi eventuali note specifiche per il tuo caso d'uso
+3. Personalizza le sezioni avanzate in base alle tue esigenze
